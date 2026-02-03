@@ -1,112 +1,87 @@
 import requests
+import hashlib
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 
 BASE_URL = "https://www.glbitm.org"
 
-# Pages that usually contain useful info
 TARGET_PATHS = [
-    "/about",
-    "/about-us",
-    "/leadership",
-    "/management",
-    "/director",
-    "/administration",
-
-    # Academics
-    "/department",
-    "/departments",
-    "/faculty",
-    "/academics",
-    "/hod",
-
-    # Admissions
-    "/admission",
-    "/admissions",
-    "/apply",
-    "/fees",
-    "/eligibility",
-
-    # Placements
-    "/placement",
-    "/placements",
-    "/training-and-placement",
-    "/tpo",
+    "/about", "/about-us", "/leadership", "/management", "/director",
+    "/department", "/departments", "/faculty", "/academics", "/hod",
+    "/admission", "/admissions", "/fees", "/eligibility",
+    "/placement", "/placements", "/training-and-placement", "/tpo",
 ]
 
-
-# Keywords to KEEP
 KEYWORDS = [
-    # Leadership
-    "ceo",
-    "director",
-    "chairman",
-    "vice chairman",
-
-    "dean",
-    "training and placement",
-    "t&p",
-    "tpo",
-
-    # Academics
-    "department",
-    "hod",
-    "head of department",
-    "faculty",
-
-    # Admissions
-    "admission",
-    "eligibility",
-    "fee",
-    "fees",
-    "apply",
-    "entrance",
-    "counselling",
-
-    # Placements
-    "placement",
-    "placements",
-    "highest package",
-    "average package",
-    "ctc",
-    "salary",
-    "recruiter",
-    "company",
-    "student",
+    "ceo", "director", "chairman", "vice chairman", "dean",
+    "training and placement", "tpo",
+    "department", "hod", "faculty",
+    "admission", "eligibility", "fee", "fees",
+    "placement", "highest package", "average package",
+    "ctc", "salary", "recruiter"
 ]
 
-
-visited = set()
+visited_urls = set()
+seen_hashes = set()
 collected_text = []
+
 
 def is_relevant(text: str) -> bool:
     text = text.lower()
-    return any(keyword in text for keyword in KEYWORDS)
+    return any(k in text for k in KEYWORDS)
+
+
+def is_unique(text: str) -> bool:
+    h = hashlib.md5(text.encode("utf-8")).hexdigest()
+    if h in seen_hashes:
+        return False
+    seen_hashes.add(h)
+    return True
+
+
+def extract_main_content(soup):
+    """
+    Extract only meaningful content, not menus or footers
+    """
+    for tag in ["main", "article"]:
+        content = soup.find(tag)
+        if content:
+            return content.get_text(" ", strip=True)
+
+    # Fallback: important content divs
+    for div in soup.find_all("div"):
+        classes = " ".join(div.get("class", [])).lower()
+        if any(k in classes for k in ["content", "about", "department", "placement"]):
+            text = div.get_text(" ", strip=True)
+            if len(text) > 300:
+                return text
+
+    return ""
+
 
 def scrape(url):
-    if url in visited:
+    if url in visited_urls:
         return
-    visited.add(url)
 
+    visited_urls.add(url)
     print("Scraping:", url)
 
     try:
-        r = requests.get(url, timeout=10)
-        soup = BeautifulSoup(r.text, "html.parser")
+        response = requests.get(url, timeout=10)
+        soup = BeautifulSoup(response.text, "html.parser")
 
-        # Remove scripts, styles, nav, footer
-        for tag in soup(["script", "style", "nav", "footer", "header"]):
+        # Remove useless elements
+        for tag in soup(["script", "style", "nav", "footer", "header", "aside"]):
             tag.decompose()
 
-        page_text = soup.get_text(separator=" ", strip=True)
+        page_text = extract_main_content(soup)
 
-        if is_relevant(page_text):
+        if page_text and is_relevant(page_text) and is_unique(page_text):
             collected_text.append(page_text)
 
-        # Follow only relevant internal links
+        # Follow only important links
         for a in soup.find_all("a", href=True):
             href = a["href"].lower()
-
             if any(path in href for path in TARGET_PATHS):
                 next_url = urljoin(BASE_URL, href)
                 scrape(next_url)
@@ -114,12 +89,12 @@ def scrape(url):
     except Exception as e:
         print("Error:", e)
 
+
 if __name__ == "__main__":
     scrape(BASE_URL)
 
-    with open("raw_text.txt", "w", encoding="utf-8") as f:
+    with open("clean_text.txt", "w", encoding="utf-8") as f:
         for text in collected_text:
             f.write(text + "\n\n")
 
-    print("✅ Relevant scraping completed.")
-
+    print("✅ Clean & deduplicated scraping completed")
