@@ -7,8 +7,11 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 
 # Load scraped text
-with open("raw_text.txt", "r", encoding="utf-8") as f:
+with open("clean_text.txt", "r", encoding="utf-8") as f:
     text = f.read()
+
+# with open("clean_text.txt", "r", encoding="utf-8") as f:
+#     text = f.read()
 
 documents = [Document(page_content=text)]
 
