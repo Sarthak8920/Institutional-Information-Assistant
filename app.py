@@ -35,7 +35,7 @@ def load_rag_chain():
         allow_dangerous_deserialization=True
     )
 
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 2})
 
     llm = ChatGroq(
         model="llama-3.1-8b-instant",
